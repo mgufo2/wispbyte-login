@@ -2,8 +2,11 @@ name: Wispbyte Auto Login
 
 on:
   schedule:
-    - cron: '31 21 */3 * *'    # 每3天UTC 21点31分
+    - cron: '16 18 2,16 * *' 
   workflow_dispatch:
+
+permissions:
+  contents: write # 授予工作流写入仓库内容的权限
 
 jobs:
   login:
@@ -46,6 +49,32 @@ jobs:
           echo "开始执行 login.py（最多 5 分钟）"
           timeout 5m python login.py && echo "login.py 成功完成" || echo "脚本执行失败或被超时中断"
           echo "本 step 结束"
+
+      # 新增的提交步骤
+      - name: Commit time.txt to repo
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 如果 time.txt 不存在，说明是第一次运行
+          if [ ! -f time.txt ]; then
+            echo "首次生成时间：$(date +'%Y-%m-%d %H:%M:%S')" > time.txt
+          else
+            echo "$(date +'%Y-%m-%d %H:%M:%S')" > time.txt
+          fi
+          
+          git add time.txt
+          
+          # 如果有更改再提交
+          if git diff --cached --quiet; then
+            echo "无变化，无需提交"
+          else
+            git commit -m "⏱️ 更新时间文件: $(date +'%Y-%m-%d %H:%M:%S')"
+            git push origin HEAD:main
+          fi
 
   notify-failure:
     needs: login
